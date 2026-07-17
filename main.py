@@ -46,13 +46,12 @@ def load_accounts_from_csv(csv_file):
                 transaction = Transaction(transaction_details['Date'], transaction_details['Narrative'], sign * amount)
                 account.add_transaction(transaction)
         except ValueError:
-            print('Amount not a number')
-            pass
+            print(f'Amount not a number. Amount value: {transaction_details["Amount"]}\n')
 
     return accounts
 
 if __name__ == '__main__':
-    accounts = load_accounts_from_csv('Transactions2014.csv')
+    accounts = load_accounts_from_csv('DodgyTransactions2015.csv')
 
     while True:
         options = ('Available commands:\n'
