@@ -90,14 +90,23 @@ if __name__ == '__main__':
     logging.basicConfig(filename='SupportBank.log', filemode='w', level=logging.DEBUG)
     logging.info('Program started')
 
+    read_input_file = True
+
     while True:
         logging.info('Waiting for a command...')
 
-        options = ('\nAvailable commands:\n'
-                   '\tImport file [Filename] - import file\n'
-                   '\tExit - stop the program\n')
-        command = input(f'{options}Enter command:')
+        if read_input_file:
+            options = ('\nAvailable commands:\n'
+                       '\tImport file [Filename] - import file\n'
+                       '\tExit - stop the program\n')
+        else:
+            options = ('\nAvailable commands:\n'
+                       '\tImport file [Filename] - import file\n'
+                       '\tList All - show all accounts\n'
+                       '\tList [Name] - show transactions for a user (example: List Todd)\n'
+                       '\tExit - stop the program\n')
 
+        command = input(f'{options}Enter command:')
         logging.info(f'Command: {command}')
 
         if command.lower() == 'exit':
@@ -108,31 +117,24 @@ if __name__ == '__main__':
             file_name = command.strip()[11:].strip()
             accounts = load_accounts(file_name)
             if accounts:
-                options = ('\nAvailable commands:\n'
-                           '\tList All - show all accounts\n'
-                           '\tList [Name] - show transactions for a user (example: List Todd)\n'
-                           '\tExit - stop the program\n')
-                command = input(f'{options}Enter command:')
-                if command.lower() == 'exit':
-                    logging.info('Program ended')
-                    break
+                read_input_file = False
+        elif not read_input_file:
+            if command.strip().lower() == 'list all':
+                for account in accounts.values():
+                    print(account)
+            elif command.lower().startswith('list '):
+                account_name = command.strip()[5:].strip().lower()
 
-                if command.strip().lower() == 'list all':
-                    for account in accounts.values():
-                        print(account)
-                elif command.lower().startswith('list '):
-                    account_name = command.strip()[5:].strip().lower()
-
-                    if account_name in accounts:
-                        print(accounts[account_name])
-                        print('Transactions')
-                        for transaction in accounts[account_name].transactions:
-                            print(f'    {transaction}')
-                    else:
-                        logging.warning(f'Account not found')
-                        print('Account not found')
+                if account_name in accounts:
+                    print(accounts[account_name])
+                    print('Transactions')
+                    for transaction in accounts[account_name].transactions:
+                        print(f'    {transaction}')
                 else:
-                    logging.warning(f'Invalid command')
-                    print('Invalid command')
+                    logging.warning(f'Account not found')
+                    print('Account not found')
+            else:
+                logging.warning(f'Invalid command')
+                print('Invalid command')
         else:
             print('Import a file first')
