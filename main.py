@@ -1,4 +1,5 @@
 import pandas as pd
+import logging
 
 class Account:
     def __init__(self, name):
@@ -28,16 +29,19 @@ def get_or_create_account(name, accounts):
     return accounts[name.lower()]
 
 def load_accounts_from_csv(csv_file):
+    logging.info(f'Loading accounts from CSV file: {csv_file}')
+
     try:
         csv_content = pd.read_csv(csv_file)
     except FileNotFoundError:
-        print('File not found')
+        logging.error(f'CSV file not found')
         exit()
     except Exception as exception:
-        print(f'Could not load CSV file. Exception: {exception}')
+        logging.error(exception)
+
     accounts = {}
 
-    for _, transaction_details in csv_content.iterrows():
+    for row_index, transaction_details in csv_content.iterrows():
         try:
             amount = float(transaction_details['Amount'])
 
@@ -46,20 +50,29 @@ def load_accounts_from_csv(csv_file):
                 transaction = Transaction(transaction_details['Date'], transaction_details['Narrative'], sign * amount)
                 account.add_transaction(transaction)
         except ValueError:
-            print(f'Amount not a number. Amount value: {transaction_details["Amount"]}\n')
+            logging.error(f'Error on line: {row_index + 2}. Amount not a number. Amount value: {transaction_details["Amount"]}')
 
     return accounts
 
 if __name__ == '__main__':
+    logging.basicConfig(filename='SupportBank.log', filemode='w', level=logging.DEBUG)
+    logging.info('Program started')
+
     accounts = load_accounts_from_csv('DodgyTransactions2015.csv')
 
     while True:
+        logging.info('Waiting for a command...')
+
         options = ('Available commands:\n'
                    '\tList All - show all accounts\n'
                    '\tList [Name] - show transactions for a user (example: List Todd)\n'
                    '\tExit - stop the program\n')
         command = input(f'{options}Enter command:')
+
+        logging.info(f'Command: {command}')
+
         if command.lower() == 'exit':
+            logging.info('Program ended')
             break
         if command.strip().lower() == 'list all':
             for account in accounts.values():
@@ -74,9 +87,9 @@ if __name__ == '__main__':
                 for transaction in accounts[account_name].transactions:
                     print(f'    {transaction}')
             else:
-                print('Account not found')
+                logging.warning(f'Account not found')
 
             print()
         else:
-            print('Invalid command')
+            logging.warning(f'Invalid command')
             print()
