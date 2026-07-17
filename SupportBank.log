@@ -1,0 +1,7 @@
+INFO:root:Program started
+INFO:root:Loading accounts from CSV file: DodgyTransactions2015.csv
+ERROR:root:Error on line: 28. Amount not a number. Amount value: One Cheeseburger
+INFO:root:Waiting for a command...
+INFO:root:Command: list stefania
+WARNING:root:Account stefania not found
+INFO:root:Waiting for a command...
