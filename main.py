@@ -34,33 +34,32 @@ def load_accounts_from_csv(csv_file):
 
     try:
         csv_content = pd.read_csv(csv_file)
+        accounts = {}
+
+        for row_index, transaction_details in csv_content.iterrows():
+            try:
+                amount = float(transaction_details['Amount'])
+
+                datetime.strptime(transaction_details['Date'], '%d/%m/%Y')
+
+                for direction, sign in [('From', -1), ('To', 1)]:
+                    account = get_or_create_account(transaction_details[direction], accounts)
+
+                    transaction = Transaction(transaction_details['Date'], transaction_details['Narrative'],
+                                              sign * amount)
+                    account.add_transaction(transaction)
+
+            except Exception as exception:
+                logging.error(
+                    f'Error on line: {row_index + 2}. {exception}')
+
+        return accounts
+
     except FileNotFoundError:
         logging.error(f'CSV file not found')
         exit()
     except Exception as exception:
         logging.error(exception)
-
-    accounts = {}
-
-    for row_index, transaction_details in csv_content.iterrows():
-        try:
-            amount = float(transaction_details['Amount'])
-
-            try:
-                datetime.strptime(transaction_details['Date'], '%d/%m/%Y')
-            except ValueError:
-                logging.error(
-                    f'Error on line: {row_index + 2}. Expected a real date. Date value: {transaction_details["Date"]}')
-
-            for direction, sign in [('From', -1), ('To', 1)]:
-                account = get_or_create_account(transaction_details[direction], accounts)
-
-                transaction = Transaction(transaction_details['Date'], transaction_details['Narrative'], sign * amount)
-                account.add_transaction(transaction)
-        except ValueError:
-            logging.error(f'Error on line: {row_index + 2}. Amount not a number. Amount value: {transaction_details["Amount"]}')
-
-    return accounts
 
 if __name__ == '__main__':
     logging.basicConfig(filename='SupportBank.log', filemode='w', level=logging.DEBUG)
