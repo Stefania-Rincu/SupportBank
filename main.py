@@ -41,18 +41,18 @@ def parse_date(date, extension):
         'json': lambda: date.date(),
     }[extension]()
 
-def load_accounts(file):
-    logging.info(f'Loading accounts from file: {file}')
+def load_accounts(file_name):
+    logging.info(f'Loading accounts from file: {file_name}')
 
     try:
         extension = file_name.split('.')[1]
         if extension not in ['csv', 'json']:
             logging.error('File format not supported')
             print('File format not supported')
-            pass
+            return None
 
         try:
-            content = read_file(file, extension)
+            content = read_file(file_name, extension)
 
             columns_by_extension = {'csv': [('From', -1), ('To', 1)], 'json': [('FromAccount', -1), ('ToAccount', 1)]}
             accounts = {}
@@ -115,8 +115,9 @@ if __name__ == '__main__':
 
         if command.lower().startswith('import file '):
             file_name = command.strip()[11:].strip()
-            accounts = load_accounts(file_name)
-            if accounts:
+            accounts_from_file = load_accounts(file_name)
+            if accounts_from_file:
+                accounts = accounts_from_file
                 read_input_file = False
         elif not read_input_file:
             if command.strip().lower() == 'list all':
