@@ -38,7 +38,7 @@ def read_file(file_name, extension):
 def parse_date(date, extension):
     return {
         'csv': lambda: datetime.strptime(date, '%d/%m/%Y'),
-        'json': lambda: datetime.strptime(str(date).split(' ')[0], '%Y-%m-%d'),
+        'json': lambda: date.date(),
     }[extension]()
 
 def load_accounts(file):
