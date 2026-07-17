@@ -1,4 +1,6 @@
 import pandas as pd
+from datetime import datetime
+import logging
 
 class Account:
     def __init__(self, name):
@@ -27,56 +29,110 @@ def get_or_create_account(name, accounts):
         accounts[name.lower()] = Account(name)
     return accounts[name.lower()]
 
-def load_accounts_from_csv(csv_file):
+def read_file(file_name, extension):
+    return {
+        'csv': lambda: pd.read_csv(file_name),
+        'json': lambda: pd.read_json(file_name)
+    }[extension]()
+
+def parse_date(date, extension):
+    return {
+        'csv': lambda: datetime.strptime(date, '%d/%m/%Y'),
+        'json': lambda: datetime.strptime(str(date).split(' ')[0], '%Y-%m-%d'),
+    }[extension]()
+
+def load_accounts(file):
+    logging.info(f'Loading accounts from file: {file}')
+
     try:
-        csv_content = pd.read_csv(csv_file)
-    except FileNotFoundError:
-        print('File not found')
-        exit()
-    except Exception as exception:
-        print(f'Could not load CSV file. Exception: {exception}')
-    accounts = {}
+        extension = file_name.split('.')[1]
+        if extension not in ['csv', 'json']:
+            logging.error('File format not supported')
+            print('File format not supported')
+            pass
 
-    for _, transaction_details in csv_content.iterrows():
         try:
-            amount = float(transaction_details['Amount'])
+            content = read_file(file, extension)
 
-            for direction, sign in [('From', -1), ('To', 1)]:
-                account = get_or_create_account(transaction_details[direction], accounts)
-                transaction = Transaction(transaction_details['Date'], transaction_details['Narrative'], sign * amount)
-                account.add_transaction(transaction)
-        except ValueError:
-            print(f'Amount not a number. Amount value: {transaction_details["Amount"]}\n')
+            columns_by_extension = {'csv': [('From', -1), ('To', 1)], 'json': [('FromAccount', -1), ('ToAccount', 1)]}
+            accounts = {}
 
-    return accounts
+            for row_index, transaction_details in content.iterrows():
+                try:
+                    amount = float(transaction_details['Amount'])
+
+                    parse_date(transaction_details['Date'], extension)
+
+                    for direction, sign in columns_by_extension[extension]:
+                        account = get_or_create_account(transaction_details[direction], accounts)
+                        transaction = Transaction(transaction_details['Date'], transaction_details['Narrative'],
+                                                  sign * amount)
+                        account.add_transaction(transaction)
+
+                except Exception as exception:
+                    index = row_index
+                    if extension == 'csv':
+                        index += 2
+                    logging.error(
+                        f'Error on line: {index}. {exception}')
+
+            return accounts
+        except FileNotFoundError:
+            logging.error('File not found')
+            print('File not found')
+        except Exception as exception:
+            logging.error(exception)
+    except IndexError:
+        logging.error('No file extension')
+        print('No file extension')
 
 if __name__ == '__main__':
-    accounts = load_accounts_from_csv('DodgyTransactions2015.csv')
+    logging.basicConfig(filename='SupportBank.log', filemode='w', level=logging.DEBUG)
+    logging.info('Program started')
 
     while True:
-        options = ('Available commands:\n'
-                   '\tList All - show all accounts\n'
-                   '\tList [Name] - show transactions for a user (example: List Todd)\n'
+        logging.info('Waiting for a command...')
+
+        options = ('\nAvailable commands:\n'
+                   '\tImport file [Filename] - import file\n'
                    '\tExit - stop the program\n')
         command = input(f'{options}Enter command:')
+
+        logging.info(f'Command: {command}')
+
         if command.lower() == 'exit':
+            logging.info('Program ended')
             break
-        if command.strip().lower() == 'list all':
-            for account in accounts.values():
-                print(account)
-            print()
-        elif command.lower().startswith('list '):
-            account_name = command.strip()[5:].strip().lower()
 
-            if account_name in accounts:
-                print(accounts[account_name])
-                print('Transactions')
-                for transaction in accounts[account_name].transactions:
-                    print(f'    {transaction}')
-            else:
-                print('Account not found')
+        if command.lower().startswith('import file '):
+            file_name = command.strip()[11:].strip()
+            accounts = load_accounts(file_name)
+            if accounts:
+                options = ('\nAvailable commands:\n'
+                           '\tList All - show all accounts\n'
+                           '\tList [Name] - show transactions for a user (example: List Todd)\n'
+                           '\tExit - stop the program\n')
+                command = input(f'{options}Enter command:')
+                if command.lower() == 'exit':
+                    logging.info('Program ended')
+                    break
 
-            print()
+                if command.strip().lower() == 'list all':
+                    for account in accounts.values():
+                        print(account)
+                elif command.lower().startswith('list '):
+                    account_name = command.strip()[5:].strip().lower()
+
+                    if account_name in accounts:
+                        print(accounts[account_name])
+                        print('Transactions')
+                        for transaction in accounts[account_name].transactions:
+                            print(f'    {transaction}')
+                    else:
+                        logging.warning(f'Account not found')
+                        print('Account not found')
+                else:
+                    logging.warning(f'Invalid command')
+                    print('Invalid command')
         else:
-            print('Invalid command')
-            print()
+            print('Import a file first')
