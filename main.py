@@ -1,4 +1,5 @@
 import pandas as pd
+from datetime import datetime
 import logging
 
 class Account:
@@ -45,8 +46,15 @@ def load_accounts_from_csv(csv_file):
         try:
             amount = float(transaction_details['Amount'])
 
+            try:
+                datetime.strptime(transaction_details['Date'], '%d/%m/%Y')
+            except ValueError:
+                logging.error(
+                    f'Error on line: {row_index + 2}. Expected a real date. Date value: {transaction_details["Date"]}')
+
             for direction, sign in [('From', -1), ('To', 1)]:
                 account = get_or_create_account(transaction_details[direction], accounts)
+
                 transaction = Transaction(transaction_details['Date'], transaction_details['Narrative'], sign * amount)
                 account.add_transaction(transaction)
         except ValueError:

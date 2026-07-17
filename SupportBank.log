@@ -1,7 +1,17 @@
 INFO:root:Program started
 INFO:root:Loading accounts from CSV file: DodgyTransactions2015.csv
 ERROR:root:Error on line: 28. Amount not a number. Amount value: One Cheeseburger
+ERROR:root:Error on line: 52. Expected a real date. Date value: Last Thursday
+INFO:root:Waiting for a command...
+INFO:root:Command: list all
+INFO:root:Waiting for a command...
+INFO:root:Command: list todd
 INFO:root:Waiting for a command...
 INFO:root:Command: list stefania
-WARNING:root:Account stefania not found
+WARNING:root:Account not found
 INFO:root:Waiting for a command...
+INFO:root:Command: print
+WARNING:root:Invalid command
+INFO:root:Waiting for a command...
+INFO:root:Command: exit
+INFO:root:Program ended
