@@ -3,7 +3,7 @@ import pandas as pd
 class Account:
     def __init__(self, name):
         self.name = name
-        self.balance = 0
+        self.balance = 0.0
         self.transactions = []
 
     def add_transaction(self, transaction):
@@ -11,7 +11,7 @@ class Account:
         self.transactions.append(transaction)
 
     def __str__(self):
-        return f'{self.name}, balance: {self.balance}'
+        return f'{self.name}, balance: {"{:.2f}".format(self.balance)}'
 
 class Transaction:
     def __init__(self, date, narrative, amount):
@@ -20,7 +20,7 @@ class Transaction:
         self.amount = amount
 
     def __str__(self):
-        return f'Date: {self.date}, Narrative: {self.narrative}, Amount: {self.amount}'
+        return f'Date: {self.date}, Narrative: {self.narrative}, Amount: {"{:.2f}".format(self.amount)}'
 
 def get_or_create_account(name, accounts):
     if name.lower() not in accounts:
