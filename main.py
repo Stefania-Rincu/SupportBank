@@ -6,6 +6,10 @@ class Account:
         self.balance = 0
         self.transactions = []
 
+    def add_transaction(self, transaction):
+        self.balance += transaction.amount
+        self.transactions.append(transaction)
+
     def __str__(self):
         return f'{self.name}, balance: {self.balance}'
 
@@ -18,54 +22,47 @@ class Transaction:
     def __str__(self):
         return f'Date: {self.date}, Narrative: {self.narrative}, Amount: {self.amount}'
 
-def process_transaction(account, amount, date, narrative):
-    account.balance += amount
-    transaction = Transaction(date, narrative, amount)
-    account.transactions.append(transaction)
-    return account
+def get_or_create_account(name, accounts):
+    if name.lower() not in accounts:
+        accounts[name.lower()] = Account(name)
+    return accounts[name.lower()]
 
-def create_account_and_process_transactions(name, transactions, group_attribute):
-    account = Account(name)
+def load_accounts_from_csv(csv_file):
+    csv_content = pd.read_csv(csv_file)
+    accounts = {}
 
-    for _, transaction_details in transactions.iterrows():
+    for _, transaction_details in csv_content.iterrows():
         amount = int(transaction_details['Amount'])
 
-        if group_attribute == 'From':
-            amount *= -1
-
-        process_transaction(account, amount, transaction_details['Date'], transaction_details['Narrative'])
-
-    return account
-
-def process_csv(csv_file):
-    csv_content = pd.read_csv(csv_file)
-    accounts = []
-
-    for column_name in ['From', 'To']:
-        grouped_transactions = csv_content.groupby(column_name)
-        for name, transactions in grouped_transactions:
-            accounts.append(create_account_and_process_transactions(name, transactions, column_name))
+        for direction, sign in [('From', -1), ('To', 1)]:
+            account = get_or_create_account(transaction_details[direction], accounts)
+            transaction = Transaction(transaction_details['Date'], transaction_details['Narrative'], sign * amount)
+            account.add_transaction(transaction)
 
     return accounts
 
 if __name__ == '__main__':
-    accounts = process_csv('Transactions2014.csv')
+    accounts = load_accounts_from_csv('Transactions2014.csv')
 
     while True:
-        command = input('Enter command: ')
-        if command.lower() == 'list all':
-            for account in accounts:
+        options = '1. List All - lists all accounts\n2. List [Name] - lists transactions for that user\n3. Exit - stops program\n'
+        command = input(f'{options}Enter command:')
+        if command.lower() == 'exit':
+            break
+        if command.strip().lower() == 'list all':
+            for account in accounts.values():
                 print(account)
             print()
         elif command.lower().startswith('list '):
-            account_exists = False
-            account_name = command.split(' ')[1]
+            account_name = command.strip()[5:].strip().lower()
 
-            for account in accounts:
-                if account.name.lower() == account_name.lower():
-                    print(account)
-                    print('Transactions')
-                    for transaction in account.transactions:
-                        print(f'    {transaction}')
+            if account_name in accounts:
+                print(accounts[account_name])
+                print('Transactions')
+                for transaction in accounts[account_name].transactions:
+                    print(f'    {transaction}')
+                print()
+            else:
+                print('Account not found')
         else:
-            break
+            print('Invalid command')
