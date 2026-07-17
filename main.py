@@ -28,16 +28,26 @@ def get_or_create_account(name, accounts):
     return accounts[name.lower()]
 
 def load_accounts_from_csv(csv_file):
-    csv_content = pd.read_csv(csv_file)
+    try:
+        csv_content = pd.read_csv(csv_file)
+    except FileNotFoundError:
+        print('File not found')
+        exit()
+    except Exception as exception:
+        print(f'Could not load CSV file. Exception: {exception}')
     accounts = {}
 
     for _, transaction_details in csv_content.iterrows():
-        amount = int(transaction_details['Amount'])
+        try:
+            amount = float(transaction_details['Amount'])
 
-        for direction, sign in [('From', -1), ('To', 1)]:
-            account = get_or_create_account(transaction_details[direction], accounts)
-            transaction = Transaction(transaction_details['Date'], transaction_details['Narrative'], sign * amount)
-            account.add_transaction(transaction)
+            for direction, sign in [('From', -1), ('To', 1)]:
+                account = get_or_create_account(transaction_details[direction], accounts)
+                transaction = Transaction(transaction_details['Date'], transaction_details['Narrative'], sign * amount)
+                account.add_transaction(transaction)
+        except ValueError:
+            print('Amount not a number')
+            pass
 
     return accounts
 
@@ -45,7 +55,10 @@ if __name__ == '__main__':
     accounts = load_accounts_from_csv('Transactions2014.csv')
 
     while True:
-        options = '1. List All - lists all accounts\n2. List [Name] - lists transactions for that user\n3. Exit - stops program\n'
+        options = ('Available commands:\n'
+                   '\tList All - show all accounts\n'
+                   '\tList [Name] - show transactions for a user (example: List Todd)\n'
+                   '\tExit - stop the program\n')
         command = input(f'{options}Enter command:')
         if command.lower() == 'exit':
             break
@@ -61,8 +74,10 @@ if __name__ == '__main__':
                 print('Transactions')
                 for transaction in accounts[account_name].transactions:
                     print(f'    {transaction}')
-                print()
             else:
                 print('Account not found')
+
+            print()
         else:
             print('Invalid command')
+            print()
