@@ -31,6 +31,17 @@ def get_or_create_account(name, accounts):
         accounts[name.lower()] = Account(name)
     return accounts[name.lower()]
 
+def read_csv(file_name):
+    content = pd.read_csv(file_name)
+    content['Date'] = content['Date'].apply(lambda date: datetime.strptime(date, '%d/%m/%Y'))
+    return content
+
+def read_json(file_name):
+    content = pd.read_json(file_name)
+    content['Date'] = content['Date'].apply(lambda date: date.date())
+    content = content.rename(columns={'ToAccount': 'To', 'FromAccount': 'From'})
+    return content
+
 def read_xml(file_name):
     with open(file_name, encoding='utf8') as f:
         xml = f.read()
@@ -39,52 +50,40 @@ def read_xml(file_name):
 
 def read_file(file_name, extension):
     return {
-        'csv': lambda: pd.read_csv(file_name),
-        'json': lambda: pd.read_json(file_name),
+        'csv': lambda: read_csv(file_name),
+        'json': lambda: read_json(file_name),
         'xml': lambda: read_xml(file_name)
     }[extension]()
 
-def format_date(date, extension):
-    return {
-        'csv': lambda: datetime.strptime(date, '%d/%m/%Y'),
-        'json': lambda: date.date(),
-        'xml': lambda: pd.to_datetime(int(date), unit='D', origin='1900-01-01').date()
-    }[extension]()
-
-def process_transaction(row_index, extension, accounts, date, to_account, from_account, narrative, amount):
+def process_transaction(row_index, accounts, details):
     try:
-        amount = float(amount)
-        date = format_date(date, extension)
+        amount = float(details['Amount'])
+        date = details['Date']
 
-        for name, sign in [(to_account, 1), (from_account, -1)]:
+        for name, sign in [(details['To'], 1), (details['From'], -1)]:
             account = get_or_create_account(name, accounts)
-            transaction = Transaction(date, narrative, sign * amount)
+            transaction = Transaction(date, details['Narrative'], sign * amount)
             account.add_transaction(transaction)
 
     except Exception as exception:
-        index = row_index
-        if extension == 'csv':
-            index += 2
         logging.error(
-            f'Error on line: {index}. {exception}')
+            f'Error on line: {row_index + 1}. {exception}')
 
-def parse_csv_and_json(extension, content, accounts):
-    columns_by_extension = {'csv':['To', 'From'], 'json': ['ToAccount', 'FromAccount']}
-
+def parse_csv_and_json(content, accounts):
     for row_index, transaction_details in content.iterrows():
-        process_transaction(row_index, extension, accounts, transaction_details['Date'], transaction_details[columns_by_extension[extension][0]],
-                            transaction_details[columns_by_extension[extension][1]], transaction_details['Narrative'], transaction_details['Amount'])
+        process_transaction(row_index, accounts, transaction_details)
 
     return accounts
 
-def parse_xml(extension, content, accounts):
+def parse_xml(content, accounts):
     all_transactions = content.find_all('SupportTransaction')
 
     for row_index, transaction in enumerate(all_transactions):
         try:
             date = transaction['Date']
-            parties = transaction.find('Parties')
+            date = pd.to_datetime(int(date), unit='D', origin='1900-01-01').date()
 
+            parties = transaction.find('Parties')
             if parties is not None:
                 to_account = parties.find('To').text
                 from_account = parties.find('From').text
@@ -103,11 +102,17 @@ def parse_xml(extension, content, accounts):
             else:
                 raise Exception('Amount not found')
 
-            process_transaction(row_index, extension, accounts, date, to_account, from_account, narrative, amount)
+            details = {
+                'Date': date,
+                'To': to_account,
+                'From': from_account,
+                'Narrative': narrative,
+                'Amount': amount
+            }
+            process_transaction(row_index, accounts, details)
 
         except Exception as exception:
-            print('failed')
-            logging.error(f'Error on line: {row_index}. {exception}')
+            logging.error(f'Error on line: {row_index + 1}. {exception}')
 
     return accounts
 
@@ -115,9 +120,9 @@ def process_file_content(extension, content):
     accounts = {}
 
     return {
-        'csv': lambda: parse_csv_and_json(extension, content, accounts),
-        'json': lambda: parse_csv_and_json(extension, content, accounts),
-        'xml': lambda: parse_xml(extension, content, accounts)
+        'csv': lambda: parse_csv_and_json(content, accounts),
+        'json': lambda: parse_csv_and_json(content, accounts),
+        'xml': lambda: parse_xml(content, accounts)
     }[extension]()
 
 def check_extension(file_name):
@@ -132,12 +137,7 @@ def load_accounts(file_name):
     logging.info(f'Loading accounts from file: {file_name}')
 
     try:
-        extension = file_name.split('.')[1]
-        if extension not in ['csv', 'json', 'xml']:
-            logging.error('File format not supported')
-            print('File format not supported')
-            return None
-
+        extension = check_extension(file_name)
         try:
             content = read_file(file_name, extension)
             return process_file_content(extension, content)
@@ -151,13 +151,6 @@ def load_accounts(file_name):
         logging.error('No file extension')
         print('No file extension')
 
-def write_to_file(file_name, extension, accounts):
-    return {
-        'csv': lambda: ,
-        'json': lambda: ,
-        'xml': lambda: 
-    }[extension]()
-
 def write_transactions(file_name, content):
     extension = check_extension(file_name)
     if extension:
@@ -168,9 +161,6 @@ def write_transactions(file_name, content):
             logging.info(f'Command: {command}')
 
             if command.lower() == 'y':
-
-
-
 
 if __name__ == '__main__':
     logging.basicConfig(filename='SupportBank.log', filemode='w', level=logging.DEBUG)
@@ -222,7 +212,6 @@ if __name__ == '__main__':
                     print('Account not found')
             elif command.lower().startswith('export file '):
                 file_name = command.strip()[11:].strip()
-
             else:
                 logging.warning(f'Invalid command')
                 print('Invalid command')
