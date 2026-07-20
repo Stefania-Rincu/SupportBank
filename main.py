@@ -54,23 +54,14 @@ def read_file(file_name, extension):
         'xml': lambda: read_xml(file_name)
     }[extension]()
 
-def format_transaction_details(date, to_account, from_account, narrative, amount):
-    return {
-        'date': date,
-        'to': to_account,
-        'from': from_account,
-        'narrative': narrative,
-        'amount': amount
-    }
-
 def process_transaction(row_index, accounts, details):
     try:
-        amount = float(details['amount'])
-        date = details['date']
+        amount = float(details['Amount'])
+        date = details['Date']
 
-        for name, sign in [(details['to'], 1), (details['from'], -1)]:
+        for name, sign in [(details['To'], 1), (details['From'], -1)]:
             account = get_or_create_account(name, accounts)
-            transaction = Transaction(date, details['narrative'], sign * amount)
+            transaction = Transaction(date, details['Narrative'], sign * amount)
             account.add_transaction(transaction)
 
     except Exception as exception:
@@ -79,10 +70,7 @@ def process_transaction(row_index, accounts, details):
 
 def parse_csv_and_json(content, accounts):
     for row_index, transaction_details in content.iterrows():
-        details = format_transaction_details(transaction_details['Date'], transaction_details['To'], transaction_details['From'],
-                                             transaction_details['Narrative'], transaction_details['Amount'])
-
-        process_transaction(row_index, accounts, details)
+        process_transaction(row_index, accounts, transaction_details)
 
     return accounts
 
@@ -113,7 +101,13 @@ def parse_xml(content, accounts):
             else:
                 raise Exception('Amount not found')
 
-            details = format_transaction_details(date, to_account, from_account, narrative, amount)
+            details = {
+                'Date': date,
+                'To': to_account,
+                'From': from_account,
+                'Narrative': narrative,
+                'Amount': amount
+            }
             process_transaction(row_index, accounts, details)
 
         except Exception as exception:
