@@ -59,10 +59,11 @@ def format_transaction_details(date, to_account, from_account, narrative, amount
         'amount': amount
     }
 
-def process_transaction(row_index, extension, accounts, details):
+def process_transaction(row_index, accounts, details):
     try:
         amount = float(details['amount'])
-        date = format_date(details['date'], extension)
+        date = details['date']
+        #date = format_date(details['date'], extension)
 
         for name, sign in [(details['to'], 1), (details['from'], -1)]:
             account = get_or_create_account(name, accounts)
@@ -70,20 +71,20 @@ def process_transaction(row_index, extension, accounts, details):
             account.add_transaction(transaction)
 
     except Exception as exception:
-        index = row_index
-        if extension == 'csv':
-            index += 2
         logging.error(
-            f'Error on line: {index}. {exception}')
+            f'Error on line: {row_index}. {exception}')
 
 def parse_csv_and_json(extension, content, accounts):
     columns_by_extension = {'csv':['To', 'From'], 'json': ['ToAccount', 'FromAccount']}
 
     for row_index, transaction_details in content.iterrows():
-        details = format_transaction_details(transaction_details['Date'], transaction_details[columns_by_extension[extension][0]],
+        date = format_date(transaction_details['Date'], extension)
+        details = format_transaction_details(date, transaction_details[columns_by_extension[extension][0]],
                                              transaction_details[columns_by_extension[extension][1]], transaction_details['Narrative'], transaction_details['Amount'])
 
-        process_transaction(row_index, extension, accounts, details)
+        if extension == 'csv':
+            process_transaction(row_index + 2, accounts, details)
+        process_transaction(row_index, accounts, details)
 
     return accounts
 
@@ -93,6 +94,8 @@ def parse_xml(extension, content, accounts):
     for row_index, transaction in enumerate(all_transactions):
         try:
             date = transaction['Date']
+            date = format_date(date, extension)
+
             parties = transaction.find('Parties')
 
             if parties is not None:
@@ -114,7 +117,7 @@ def parse_xml(extension, content, accounts):
                 raise Exception('Amount not found')
 
             details = format_transaction_details(date, to_account, from_account, narrative, amount)
-            process_transaction(row_index, extension, accounts, details)
+            process_transaction(row_index, accounts, details)
 
         except Exception as exception:
             print(exception)
