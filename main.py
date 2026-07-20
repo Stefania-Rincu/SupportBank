@@ -105,8 +105,8 @@ def parse_xml(extension, content, accounts):
             process_transaction(row_index, extension, accounts, date, to_account, from_account, narrative, amount)
 
         except Exception as exception:
-            print('failed')
-            logging.error(f'Error on line: {row_index}. {exception}')
+            print(exception)
+            logging.error(f'Error on line: {row_index + 1}. {exception}')
 
     return accounts
 
