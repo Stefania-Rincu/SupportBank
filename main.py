@@ -1,5 +1,6 @@
 import pandas as pd
 from datetime import datetime
+from bs4 import BeautifulSoup
 import logging
 
 class Account:
@@ -29,16 +30,93 @@ def get_or_create_account(name, accounts):
         accounts[name.lower()] = Account(name)
     return accounts[name.lower()]
 
+def read_xml(file_name):
+    with open(file_name, encoding='utf8') as f:
+        xml = f.read()
+
+    return BeautifulSoup(xml, 'xml')
+
 def read_file(file_name, extension):
     return {
         'csv': lambda: pd.read_csv(file_name),
-        'json': lambda: pd.read_json(file_name)
+        'json': lambda: pd.read_json(file_name),
+        'xml': lambda: read_xml(file_name)
     }[extension]()
 
-def parse_date(date, extension):
+def format_date(date, extension):
     return {
         'csv': lambda: datetime.strptime(date, '%d/%m/%Y'),
         'json': lambda: date.date(),
+        'xml': lambda: pd.to_datetime(int(date), unit='D', origin='1900-01-01').date()
+    }[extension]()
+
+def process_transaction(row_index, extension, accounts, date, to_account, from_account, narrative, amount):
+    try:
+        amount = float(amount)
+        date = format_date(date, extension)
+
+        for name, sign in [(to_account, 1), (from_account, -1)]:
+            account = get_or_create_account(name, accounts)
+            transaction = Transaction(date, narrative, sign * amount)
+            account.add_transaction(transaction)
+
+    except Exception as exception:
+        index = row_index
+        if extension == 'csv':
+            index += 2
+        logging.error(
+            f'Error on line: {index}. {exception}')
+
+def parse_csv_and_json(extension, content, accounts):
+    columns_by_extension = {'csv':['To', 'From'], 'json': ['ToAccount', 'FromAccount']}
+
+    for row_index, transaction_details in content.iterrows():
+        process_transaction(row_index, extension, accounts, transaction_details['Date'], transaction_details[columns_by_extension[extension][0]],
+                            transaction_details[columns_by_extension[extension][1]], transaction_details['Narrative'], transaction_details['Amount'])
+
+    return accounts
+
+def parse_xml(extension, content, accounts):
+    all_transactions = content.find_all('SupportTransaction')
+
+    for row_index, transaction in enumerate(all_transactions):
+        try:
+            date = transaction['Date']
+            parties = transaction.find('Parties')
+
+            if parties is not None:
+                to_account = parties.find('To').text
+                from_account = parties.find('From').text
+            else:
+                raise Exception('Parties not found')
+
+            narrative = transaction.find('Description')
+            if narrative:
+                narrative = narrative.text
+            else:
+                raise Exception('Narrative not found')
+
+            amount = transaction.find('Value')
+            if amount:
+                amount = amount.text
+            else:
+                raise Exception('Amount not found')
+
+            process_transaction(row_index, extension, accounts, date, to_account, from_account, narrative, amount)
+
+        except Exception as exception:
+            print('failed')
+            logging.error(f'Error on line: {row_index}. {exception}')
+
+    return accounts
+
+def process_file_content(extension, content):
+    accounts = {}
+
+    return {
+        'csv': lambda: parse_csv_and_json(extension, content, accounts),
+        'json': lambda: parse_csv_and_json(extension, content, accounts),
+        'xml': lambda: parse_xml(extension, content, accounts)
     }[extension]()
 
 def load_accounts(file_name):
@@ -46,37 +124,15 @@ def load_accounts(file_name):
 
     try:
         extension = file_name.split('.')[1]
-        if extension not in ['csv', 'json']:
+        if extension not in ['csv', 'json', 'xml']:
             logging.error('File format not supported')
             print('File format not supported')
             return None
 
         try:
             content = read_file(file_name, extension)
+            return process_file_content(extension, content)
 
-            columns_by_extension = {'csv': [('From', -1), ('To', 1)], 'json': [('FromAccount', -1), ('ToAccount', 1)]}
-            accounts = {}
-
-            for row_index, transaction_details in content.iterrows():
-                try:
-                    amount = float(transaction_details['Amount'])
-
-                    parse_date(transaction_details['Date'], extension)
-
-                    for direction, sign in columns_by_extension[extension]:
-                        account = get_or_create_account(transaction_details[direction], accounts)
-                        transaction = Transaction(transaction_details['Date'], transaction_details['Narrative'],
-                                                  sign * amount)
-                        account.add_transaction(transaction)
-
-                except Exception as exception:
-                    index = row_index
-                    if extension == 'csv':
-                        index += 2
-                    logging.error(
-                        f'Error on line: {index}. {exception}')
-
-            return accounts
         except FileNotFoundError:
             logging.error('File not found')
             print('File not found')
