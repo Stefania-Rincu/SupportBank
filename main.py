@@ -161,6 +161,7 @@ def write_transactions(file_name, content):
             logging.info(f'Command: {command}')
 
             if command.lower() == 'y':
+                pass
 
 if __name__ == '__main__':
     logging.basicConfig(filename='SupportBank.log', filemode='w', level=logging.DEBUG)
