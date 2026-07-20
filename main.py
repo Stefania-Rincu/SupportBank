@@ -2,6 +2,7 @@ import pandas as pd
 from datetime import datetime
 from bs4 import BeautifulSoup
 import logging
+import os
 
 class Account:
     def __init__(self, name):
@@ -25,6 +26,12 @@ class Transaction:
     def __str__(self):
         return f'Date: {self.date}, Narrative: {self.narrative}, Amount: {"{:.2f}".format(self.amount)}'
 
+class Complete_Transaction(Transaction):
+    def __init__(self, date, narrative, amount, to_account, from_account):
+        super().__init__(date, narrative, amount)
+        self.to_account = to_account
+        self.from_account = from_account
+
 def get_or_create_account(name, accounts):
     if name.lower() not in accounts:
         accounts[name.lower()] = Account(name)
@@ -38,6 +45,7 @@ def read_csv(file_name):
 def read_json(file_name):
     content = pd.read_json(file_name)
     content['Date'] = content['Date'].apply(lambda date: date.date())
+    content['Date'] = content['Date'].apply(lambda date: date.strftime('%d/%m/%Y'))
     content = content.rename(columns={'ToAccount': 'To', 'FromAccount': 'From'})
     return content
 
@@ -54,7 +62,7 @@ def read_file(file_name, extension):
         'xml': lambda: read_xml(file_name)
     }[extension]()
 
-def process_transaction(row_index, accounts, details):
+def process_transaction(row_index, accounts, details, complete_transactions):
     try:
         amount = float(details['Amount'])
         date = details['Date']
@@ -64,23 +72,27 @@ def process_transaction(row_index, accounts, details):
             transaction = Transaction(date, details['Narrative'], sign * amount)
             account.add_transaction(transaction)
 
+        complete_transaction = Complete_Transaction(str(date), details['Narrative'], details['Amount'], details['To'], details['From'])
+        complete_transactions.append(complete_transaction)
+
     except Exception as exception:
         logging.error(
             f'Error on line: {row_index + 1}. {exception}')
 
-def parse_csv_and_json(content, accounts):
+def parse_csv_and_json(content, accounts, complete_transactions):
     for row_index, transaction_details in content.iterrows():
-        process_transaction(row_index, accounts, transaction_details)
+        process_transaction(row_index, accounts, transaction_details, complete_transactions)
 
-    return accounts
+    return accounts, complete_transactions
 
-def parse_xml(content, accounts):
+def parse_xml(content, accounts, complete_transactions):
     all_transactions = content.find_all('SupportTransaction')
 
     for row_index, transaction in enumerate(all_transactions):
         try:
             date = transaction['Date']
             date = pd.to_datetime(int(date), unit='D', origin='1900-01-01').date()
+            date = date.strftime('%d/%m/%Y')
 
             parties = transaction.find('Parties')
             if parties is not None:
@@ -108,20 +120,21 @@ def parse_xml(content, accounts):
                 'Narrative': narrative,
                 'Amount': amount
             }
-            process_transaction(row_index, accounts, details)
+            process_transaction(row_index, accounts, details, complete_transactions)
 
         except Exception as exception:
             logging.error(f'Error on line: {row_index + 1}. {exception}')
 
-    return accounts
+    return accounts, complete_transactions
 
 def process_file_content(extension, content):
     accounts = {}
+    complete_transactions = []
 
     return {
-        'csv': lambda: parse_csv_and_json(content, accounts),
-        'json': lambda: parse_csv_and_json(content, accounts),
-        'xml': lambda: parse_xml(content, accounts)
+        'csv': lambda: parse_csv_and_json(content, accounts, complete_transactions),
+        'json': lambda: parse_csv_and_json(content, accounts, complete_transactions),
+        'xml': lambda: parse_xml(content, accounts, complete_transactions)
     }[extension]()
 
 def load_accounts(file_name):
@@ -134,18 +147,33 @@ def load_accounts(file_name):
             print('File format not supported')
             return None
 
-        try:
-            content = read_file(file_name, extension)
-            return process_file_content(extension, content)
+        content = read_file(file_name, extension)
+        return process_file_content(extension, content)
 
-        except FileNotFoundError:
-            logging.error('File not found')
-            print('File not found')
-        except Exception as exception:
-            logging.error(exception)
     except IndexError:
         logging.error('No file extension')
         print('No file extension')
+
+def write_transactions(file_name, transactions):
+    if os.path.exists(file_name + '.csv'):
+        logging.info(f'File {file_name} already exists.')
+
+        command = input(f'File already exists. Overwrite? (y/n):')
+        logging.info(f'Command: {command}')
+
+        if command.lower().strip() == 'n':
+            print('File already exists.')
+            logging.info('File already exists')
+            return
+
+    df = pd.DataFrame(columns=['Date', 'To', 'From', 'Narrative', 'Amount'])
+    for transaction in transactions:
+        row = pd.DataFrame([{'Date': transaction.date, 'To': transaction.to_account, 'From': transaction.from_account,
+                             'Narrative': transaction.narrative, 'Amount': transaction.amount}])
+        df = pd.concat([df, row], ignore_index=False)
+
+    df.to_csv(file_name + '.csv', index=False)
+    logging.info('Saving transactions to file')
 
 if __name__ == '__main__':
     logging.basicConfig(filename='SupportBank.log', filemode='w', level=logging.DEBUG)
@@ -176,10 +204,17 @@ if __name__ == '__main__':
 
         if command.lower().startswith('import file '):
             file_name = command.strip()[11:].strip()
-            accounts_from_file = load_accounts(file_name)
-            if accounts_from_file:
-                accounts = accounts_from_file
-                read_input_file = False
+            try:
+                accounts_from_file, transactions_from_file = load_accounts(file_name)
+                if accounts_from_file and transactions_from_file:
+                    accounts = accounts_from_file
+                    transactions = transactions_from_file
+                    read_input_file = False
+            except FileNotFoundError:
+                logging.error('File not found')
+                print('File not found')
+            except Exception as exception:
+                logging.error(exception)
         elif not read_input_file:
             if command.strip().lower() == 'list all':
                 for account in accounts.values():
@@ -195,6 +230,21 @@ if __name__ == '__main__':
                 else:
                     logging.warning(f'Account not found')
                     print('Account not found')
+            elif command.lower().startswith('export file '):
+                file_name = command.strip()[11:].strip()
+                write_transactions(file_name, transactions)
+
+                accounts_from_file, transactions_from_file = load_accounts(file_name + '.csv')
+                if accounts_from_file and transactions_from_file:
+                    accounts = accounts_from_file
+                    transactions = transactions_from_file
+                    read_input_file = False
+
+                for account in accounts.values():
+                    print(account)
+
+                for transaction in accounts['laura b'].transactions:
+                    print(transaction)
             else:
                 logging.warning(f'Invalid command')
                 print('Invalid command')
