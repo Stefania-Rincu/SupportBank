@@ -45,6 +45,7 @@ def read_csv(file_name):
 def read_json(file_name):
     content = pd.read_json(file_name)
     content['Date'] = content['Date'].apply(lambda date: date.date())
+    content['Date'] = content['Date'].apply(lambda date: date.strftime('%d/%m/%Y'))
     content = content.rename(columns={'ToAccount': 'To', 'FromAccount': 'From'})
     return content
 
@@ -91,6 +92,7 @@ def parse_xml(content, accounts, complete_transactions):
         try:
             date = transaction['Date']
             date = pd.to_datetime(int(date), unit='D', origin='1900-01-01').date()
+            date = date.strftime('%d/%m/%Y')
 
             parties = transaction.find('Parties')
             if parties is not None:
@@ -162,7 +164,7 @@ def write_transactions(file_name, transactions):
         if command.lower().strip() == 'n':
             print('File already exists.')
             logging.info('File already exists')
-            pass
+            return
 
     df = pd.DataFrame(columns=['Date', 'To', 'From', 'Narrative', 'Amount'])
     for transaction in transactions:
@@ -231,6 +233,18 @@ if __name__ == '__main__':
             elif command.lower().startswith('export file '):
                 file_name = command.strip()[11:].strip()
                 write_transactions(file_name, transactions)
+
+                accounts_from_file, transactions_from_file = load_accounts(file_name + '.csv')
+                if accounts_from_file and transactions_from_file:
+                    accounts = accounts_from_file
+                    transactions = transactions_from_file
+                    read_input_file = False
+
+                for account in accounts.values():
+                    print(account)
+
+                for transaction in accounts['laura b'].transactions:
+                    print(transaction)
             else:
                 logging.warning(f'Invalid command')
                 print('Invalid command')
